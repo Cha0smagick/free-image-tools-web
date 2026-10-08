@@ -1,0 +1,489 @@
+/* PixelLibre — bindings de UI: paneles, recorte, preview, exportación */
+(() => {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+
+  const preview = $('preview');
+  const canvasWrap = $('canvas-wrap');
+  const canvasHolder = $('canvas-holder');
+  const overlay = $('crop-overlay');
+
+  let activeTool = 'resize';
+  let previewScheduled = false;
+  let pushTimer = null;
+  let estimateTimer = null;
+  let pendingCrop = null;
+  let dragRect = null;
+  let dragOrigin = null;
+
+  /* ---------- preview ---------- */
+
+  function schedulePreview() {
+    if (previewScheduled) return;
+    previewScheduled = true;
+    requestAnimationFrame(() => {
+      previewScheduled = false;
+      renderPreview();
+    });
+  }
+
+  function fitScale(outW, outH) {
+    const maxW = canvasWrap.clientWidth - 24;
+    const maxH = canvasWrap.clientHeight - 24;
+    if (maxW <= 0 || maxH <= 0) return 1;
+    return Math.min(1, maxW / outW, maxH / outH);
+  }
+
+  function renderPreview() {
+    if (!App.state.baseBitmap) return;
+    const dims = activeTool === 'crop' ? App.rotatedSize() : App.outputSize();
+    const previewScale = fitScale(dims.w, dims.h);
+    App.renderTo(preview, previewScale, { ignoreCrop: activeTool === 'crop' });
+    updateCropOverlay();
+    updateInfo();
+  }
+
+  function updateInfo() {
+    const s = App.state;
+    if (!s.baseBitmap) return;
+    const out = App.outputSize();
+    $('img-info').textContent = s.fileName + ' · ' + s.baseBitmap.width + '×' + s.baseBitmap.height + ' → salida ' + out.w + '×' + out.h;
+  }
+
+  /* ---------- recorte ---------- */
+
+  function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+  function holderPoint(e) {
+    const rect = canvasHolder.getBoundingClientRect();
+    return {
+      fx: clamp01((e.clientX - rect.left) / rect.width),
+      fy: clamp01((e.clientY - rect.top) / rect.height)
+    };
+  }
+
+  function drawCropBox(rect) {
+    const box = rect || pendingCrop || App.state.crop;
+    if (!box || activeTool !== 'crop') {
+      overlay.classList.add('hidden');
+      return;
+    }
+    overlay.classList.remove('hidden');
+    overlay.style.left = (box.x * 100) + '%';
+    overlay.style.top = (box.y * 100) + '%';
+    overlay.style.width = (box.w * 100) + '%';
+    overlay.style.height = (box.h * 100) + '%';
+  }
+
+  function cropDimsText(rect) {
+    const box = rect || pendingCrop || App.state.crop;
+    if (!box) return 'Sin recorte — arrastra sobre la imagen';
+    const r = App.rotatedSize();
+    return Math.max(1, Math.round(box.w * r.w)) + ' × ' + Math.max(1, Math.round(box.h * r.h)) + ' px';
+  }
+
+  function updateCropOverlay() {
+    drawCropBox();
+    if (activeTool === 'crop') $('crop-dims').textContent = cropDimsText();
+  }
+
+  function startDrag(e) {
+    if (activeTool !== 'crop') return;
+    e.preventDefault();
+    dragOrigin = holderPoint(e);
+    dragRect = { x: dragOrigin.fx, y: dragOrigin.fy, w: 0, h: 0 };
+    try {
+      canvasHolder.setPointerCapture(e.pointerId);
+    } catch (err) {
+      /* la captura de pointer es opcional; el arrastre sigue funcionando */
+    }
+    drawCropBox(dragRect);
+    $('crop-dims').textContent = cropDimsText(dragRect);
+  }
+
+  function moveDrag(e) {
+    if (!dragOrigin) return;
+    e.preventDefault();
+    const p = holderPoint(e);
+    dragRect = {
+      x: Math.min(dragOrigin.fx, p.fx),
+      y: Math.min(dragOrigin.fy, p.fy),
+      w: Math.abs(p.fx - dragOrigin.fx),
+      h: Math.abs(p.fy - dragOrigin.fy)
+    };
+    drawCropBox(dragRect);
+    $('crop-dims').textContent = cropDimsText(dragRect);
+  }
+
+  function endDrag() {
+    if (!dragOrigin) return;
+    if (dragRect && dragRect.w > 0.02 && dragRect.h > 0.02) {
+      pendingCrop = dragRect;
+      $('btn-apply-crop').disabled = false;
+    } else {
+      dragRect = null;
+      drawCropBox();
+      $('crop-dims').textContent = cropDimsText();
+    }
+    dragOrigin = null;
+  }
+
+  canvasHolder.addEventListener('pointerdown', startDrag);
+  canvasHolder.addEventListener('pointermove', moveDrag);
+  canvasHolder.addEventListener('pointerup', endDrag);
+  canvasHolder.addEventListener('pointercancel', endDrag);
+
+  $('btn-apply-crop').addEventListener('click', () => {
+    if (!pendingCrop) return;
+    App.setCrop(pendingCrop);
+    pendingCrop = null;
+    dragRect = null;
+    $('btn-apply-crop').disabled = true;
+  });
+
+  $('crop-clear').addEventListener('click', () => {
+    App.clearCrop();
+    pendingCrop = null;
+    dragRect = null;
+    $('btn-apply-crop').disabled = true;
+  });
+
+  /* ---------- cambio de herramienta ---------- */
+
+  const toolBtns = Array.from(document.querySelectorAll('.tool-btn'));
+  const panels = Array.from(document.querySelectorAll('.panel'));
+
+  function setTool(name) {
+    pendingCrop = null;
+    dragRect = null;
+    $('btn-apply-crop').disabled = true;
+    activeTool = name;
+    toolBtns.forEach((b) => b.classList.toggle('active', b.dataset.tool === name));
+    panels.forEach((p) => p.classList.toggle('active', p.dataset.panel === name));
+    renderPreview();
+  }
+
+  toolBtns.forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
+
+  /* ---------- ajustes ---------- */
+
+  const adjDefs = [
+    { id: 'adj-brightness', key: 'brightness', unit: '%' },
+    { id: 'adj-contrast', key: 'contrast', unit: '%' },
+    { id: 'adj-saturation', key: 'saturation', unit: '%' },
+    { id: 'adj-blur', key: 'blur', unit: ' px' }
+  ];
+
+  function commitSoon() {
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(() => App.pushState(), 500);
+  }
+
+  adjDefs.forEach(({ id, key, unit }) => {
+    $(id).addEventListener('input', (e) => {
+      const v = Number(e.target.value);
+      $(id + '-val').textContent = v + unit;
+      App.setAdjustment(key, v, false);
+      commitSoon();
+    });
+  });
+
+  function syncAdjustSliders() {
+    adjDefs.forEach(({ id, key, unit }) => {
+      const v = App.state.adjustments[key];
+      $(id).value = v;
+      $(id + '-val').textContent = v + unit;
+    });
+  }
+
+  $('adj-reset').addEventListener('click', () => App.resetAdjustments());
+
+  /* ---------- esquinas ---------- */
+
+  $('corners-slider').addEventListener('input', (e) => {
+    const v = Number(e.target.value);
+    $('corners-val').textContent = v + ' px';
+    App.setCorners(v, false);
+    commitSoon();
+  });
+
+  $('corners-reset').addEventListener('click', () => App.setCorners(0));
+
+  function syncCorners() {
+    const v = App.state.corners;
+    $('corners-slider').value = v;
+    $('corners-val').textContent = v + ' px';
+  }
+
+  /* ---------- filtros ---------- */
+
+  const filterKeys = ['grayscale', 'sepia', 'invert'];
+
+  filterKeys.forEach((k) => {
+    const chip = document.querySelector('[data-filter="' + k + '"]');
+    if (chip) chip.addEventListener('click', () => App.toggleFilter(k));
+  });
+
+  function syncFilterChips() {
+    filterKeys.forEach((k) => {
+      const chip = document.querySelector('[data-filter="' + k + '"]');
+      if (chip) chip.classList.toggle('active', Boolean(App.state.filters[k]));
+    });
+  }
+
+  /* ---------- redimensionar ---------- */
+
+  function onResizeInput() {
+    const wInput = $('resize-w');
+    const hInput = $('resize-h');
+    let w = Number(wInput.value);
+    let h = Number(hInput.value);
+    const lock = $('resize-lock').checked;
+    if (lock && document.activeElement === wInput && w > 0) {
+      h = Math.round(w / App.currentAspect());
+      hInput.value = h;
+    } else if (lock && document.activeElement === hInput && h > 0) {
+      w = Math.round(h * App.currentAspect());
+      wInput.value = w;
+    }
+    if (w > 0 && h > 0) {
+      App.setResize(w, h, false);
+      commitSoon();
+    }
+  }
+
+  $('resize-w').addEventListener('input', onResizeInput);
+  $('resize-h').addEventListener('input', onResizeInput);
+
+  function syncResizeInputs() {
+    if (document.activeElement === $('resize-w') || document.activeElement === $('resize-h')) return;
+    const out = App.outputSize();
+    $('resize-w').value = out.w;
+    $('resize-h').value = out.h;
+    $('resize-current').textContent = 'Salida actual: ' + out.w + ' × ' + out.h + ' px';
+  }
+
+  Array.from(document.querySelectorAll('[data-preset]')).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const parts = btn.dataset.preset.split('x');
+      const w = Number(parts[0]);
+      const h = Number(parts[1]);
+      App.setResize(w, h);
+    });
+  });
+
+  $('resize-clear').addEventListener('click', () => App.clearResize());
+
+  /* ---------- rotar / espejar ---------- */
+
+  $('rot-ccw').addEventListener('click', () => App.rotate(-90));
+  $('rot-cw').addEventListener('click', () => App.rotate(90));
+  $('rot-180').addEventListener('click', () => App.rotate(180));
+  $('flip-h').addEventListener('click', () => App.setFlip('h'));
+  $('flip-v').addEventListener('click', () => App.setFlip('v'));
+
+  /* ---------- exportar ---------- */
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(2) + ' MB';
+  }
+
+  function syncExportUI() {
+    $('export-format').value = App.state.format;
+    $('quality-row').classList.toggle('hidden', App.state.format === 'png');
+    const out = App.outputSize();
+    $('export-dims').textContent = out.w + ' × ' + out.h + ' px';
+    estimateSize();
+  }
+
+  function estimateSize() {
+    clearTimeout(estimateTimer);
+    estimateTimer = setTimeout(async () => {
+      try {
+        const blob = await App.exportBlob();
+        $('export-size').textContent = formatBytes(blob.size) + ' aprox.';
+      } catch (err) {
+        $('export-size').textContent = '—';
+      }
+    }, 350);
+  }
+
+  $('export-format').addEventListener('change', (e) => {
+    App.setFormat(e.target.value);
+  });
+
+  $('export-quality').addEventListener('input', (e) => {
+    const v = Number(e.target.value);
+    $('export-quality-val').textContent = v + '%';
+    App.setQuality(v);
+    estimateSize();
+  });
+
+  $('btn-download').addEventListener('click', async () => {
+    try {
+      App.pushState();
+      const blob = await App.exportBlob();
+      App.download(blob);
+      App.toast('¡Descarga lista! 🎉');
+    } catch (err) {
+      App.toast('No se pudo exportar la imagen');
+    }
+  });
+
+  /* ---------- barra superior ---------- */
+
+  $('btn-undo').addEventListener('click', () => App.undo());
+  $('btn-redo').addEventListener('click', () => App.redo());
+  $('btn-reset').addEventListener('click', () => App.resetEdits());
+
+  $('btn-new').addEventListener('click', () => {
+    $('editor').classList.add('hidden');
+    $('dropzone-section').classList.remove('hidden');
+  });
+
+  /* ---------- dropzone ---------- */
+
+  const fileInput = $('file-input');
+  const dropzone = $('dropzone');
+
+  dropzone.addEventListener('click', () => fileInput.click());
+
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fileInput.click();
+    }
+  });
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (file) App.loadFile(file);
+    fileInput.value = '';
+  });
+
+  ['dragover', 'dragenter'].forEach((ev) => {
+    dropzone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragging');
+    });
+    canvasWrap.addEventListener(ev, (e) => e.preventDefault());
+  });
+
+  ['dragleave', 'drop'].forEach((ev) => {
+    dropzone.addEventListener(ev, () => dropzone.classList.remove('dragging'));
+  });
+
+  dropzone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) App.loadFile(file);
+  });
+
+  canvasWrap.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) App.loadFile(file);
+  });
+
+  /* ---------- quitar fondo (IA) ---------- */
+
+  function baseToBlob() {
+    return new Promise((resolve, reject) => {
+      const b = App.state.baseBitmap;
+      if (!b) {
+        reject(new Error('No hay imagen cargada'));
+        return;
+      }
+      const tmp = document.createElement('canvas');
+      tmp.width = b.width;
+      tmp.height = b.height;
+      const ctx = tmp.getContext('2d');
+      ctx.drawImage(b, 0, 0);
+      tmp.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('No se pudo preparar la imagen'));
+      }, 'image/png');
+    });
+  }
+
+  function syncBgStatus() {
+    const s = App.state;
+    const removed = Boolean(s.baseBitmap && s.originalBitmap && s.baseBitmap !== s.originalBitmap);
+    $('bg-status').textContent = removed ? '✓ Imagen sin fondo lista' : 'Imagen original (con fondo)';
+    const btn = $('btn-remove-bg');
+    btn.textContent = removed ? 'Restaurar original' : '🪄 Quitar fondo con IA';
+    btn.dataset.mode = removed ? 'restore' : 'remove';
+  }
+
+  function showBgProgress(label) {
+    $('bg-progress-label').textContent = label;
+    $('bg-progress-bar').style.width = '2%';
+    $('bg-progress').classList.remove('hidden');
+  }
+
+  function hideBgProgress() {
+    $('bg-progress').classList.add('hidden');
+  }
+
+  function setBgProgress(label, pct) {
+    if (label) $('bg-progress-label').textContent = label;
+    $('bg-progress-bar').style.width = Math.max(2, Math.min(100, pct)) + '%';
+  }
+
+  $('btn-remove-bg').addEventListener('click', async () => {
+    if ($('btn-remove-bg').dataset.mode === 'restore') {
+      App.restoreOriginal();
+      return;
+    }
+    showBgProgress('Cargando motor de IA…');
+    try {
+      const blob = await baseToBlob();
+      const result = await BgRemoval.run(blob, setBgProgress);
+      const bitmap = await createImageBitmap(result);
+      App.applyBgRemoved(bitmap);
+      App.toast('¡Fondo eliminado! Exporta en PNG o WebP para conservar la transparencia');
+    } catch (err) {
+      App.toast((err && err.message) || 'No se pudo quitar el fondo');
+    } finally {
+      hideBgProgress();
+    }
+  });
+
+  /* ---------- sincronización global ---------- */
+
+  function syncHistoryButtons() {
+    $('btn-undo').disabled = !App.canUndo();
+    $('btn-redo').disabled = !App.canRedo();
+  }
+
+  function syncAll() {
+    syncResizeInputs();
+    syncFilterChips();
+    syncAdjustSliders();
+    syncCorners();
+    syncExportUI();
+    syncBgStatus();
+    syncHistoryButtons();
+  }
+
+  document.addEventListener('pixellibre:loaded', () => {
+    $('dropzone-section').classList.add('hidden');
+    $('editor').classList.remove('hidden');
+    activeTool = 'resize';
+    toolBtns.forEach((b) => b.classList.toggle('active', b.dataset.tool === 'resize'));
+    panels.forEach((p) => p.classList.toggle('active', p.dataset.panel === 'resize'));
+    syncAll();
+    renderPreview();
+  });
+
+  document.addEventListener('pixellibre:state', () => {
+    syncAll();
+    schedulePreview();
+  });
+
+  document.addEventListener('pixellibre:live', () => {
+    schedulePreview();
+  });
+})();

@@ -1,0 +1,18 @@
+{
+  "name": "PixelLibre — Editor de imágenes gratis",
+  "short_name": "PixelLibre",
+  "description": "Editor de imágenes 100% gratuito: quita el fondo con IA, filtros, recortes y exportación. Sin registro ni marcas de agua.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0B1026",
+  "theme_color": "#0B1026",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

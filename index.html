@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PixelLibre — Edición de imágenes gratis en tu navegador</title>
+  <meta name="description" content="Editor de imágenes 100% gratuito: quita el fondo con IA, blanco y negro, redimensionar, recortar, rotar y más. Sin registro, sin marcas de agua, todo procesado en tu navegador.">
+  <meta property="og:title" content="PixelLibre — Edición de imágenes gratis en tu navegador">
+  <meta property="og:description" content="Quita el fondo con IA, filtros, recortes y más. Gratis, sin registro y privado: tus imágenes nunca salen de tu dispositivo.">
+  <meta property="og:type" content="website">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="dns-prefetch" href="https://staticimgly.com">
+  <link rel="stylesheet" href="css/styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "PixelLibre",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Any",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "description": "Editor de imágenes gratuito: quita el fondo con IA, filtros, recortes, rotación y exportación. Sin registro ni marcas de agua."
+  }
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 128 128" width="34" height="34" aria-hidden="true">
+        <defs>
+          <linearGradient id="brand-g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#FFB03A"/>
+            <stop offset="1" stop-color="#35C4D9"/>
+          </linearGradient>
+        </defs>
+        <rect x="4" y="4" width="120" height="120" rx="28" fill="#0B1026" stroke="url(#brand-g)" stroke-width="6"/>
+        <text x="64" y="88" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="68" font-weight="800" fill="url(#brand-g)">P</text>
+      </svg>
+      <h1>PixelLibre</h1>
+      <span class="tagline">Edita imágenes 100% gratis · sin registro · todo en tu navegador</span>
+    </div>
+    <span class="privacy-badge">🔒 Privado: tus imágenes nunca salen de tu dispositivo</span>
+  </header>
+
+  <main>
+    <section id="dropzone-section">
+      <div id="dropzone" tabindex="0" role="button" aria-label="Subir imagen: arrastra aquí o haz clic para elegir">
+        <div class="dz-icon">🖼️</div>
+        <div class="dz-title">Arrastra tu imagen aquí o haz clic para elegir</div>
+        <div class="dz-hint">JPG · PNG · WebP · GIF · también puedes pegar con Ctrl+V</div>
+        <div class="dz-free">Gratis para siempre · sin marcas de agua · sin límites</div>
+      </div>
+      <input type="file" id="file-input" accept="image/*" hidden>
+    </section>
+
+    <div id="editor" class="editor hidden">
+      <div class="editor-topbar">
+        <button id="btn-new" class="btn" type="button">🖼 Nueva imagen</button>
+        <div class="topbar-group">
+          <button id="btn-undo" class="btn" type="button" title="Ctrl+Z">↶ Deshacer</button>
+          <button id="btn-redo" class="btn" type="button" title="Ctrl+Y">↷ Rehacer</button>
+          <button id="btn-reset" class="btn" type="button">♻ Reiniciar</button>
+        </div>
+        <span id="img-info" class="img-info"></span>
+      </div>
+
+      <div class="editor-main">
+        <nav class="tools-rail" aria-label="Herramientas">
+          <button class="tool-btn active" data-tool="resize" type="button"><span class="tool-ico">📐</span>Redimensionar</button>
+          <button class="tool-btn" data-tool="crop" type="button"><span class="tool-ico">✂️</span>Recortar</button>
+          <button class="tool-btn" data-tool="rotate" type="button"><span class="tool-ico">🔄</span>Rotar / Espejar</button>
+          <button class="tool-btn" data-tool="filters" type="button"><span class="tool-ico">🎨</span>Filtros</button>
+          <button class="tool-btn" data-tool="adjust" type="button"><span class="tool-ico">☀️</span>Ajustes</button>
+          <button class="tool-btn" data-tool="background" type="button"><span class="tool-ico">🪄</span>Quitar fondo</button>
+          <button class="tool-btn" data-tool="corners" type="button"><span class="tool-ico">🔲</span>Esquinas</button>
+          <button class="tool-btn" data-tool="export" type="button"><span class="tool-ico">⬇️</span>Exportar</button>
+        </nav>
+
+        <div class="canvas-wrap" id="canvas-wrap">
+          <div class="canvas-holder" id="canvas-holder">
+            <canvas id="preview" aria-label="Vista previa de la imagen"></canvas>
+            <div id="crop-overlay" class="crop-overlay hidden"></div>
+          </div>
+        </div>
+
+        <aside id="tool-panel">
+          <div class="panel active" data-panel="resize">
+            <h2>Redimensionar</h2>
+            <div class="field-row">
+              <label>Ancho <input type="number" id="resize-w" min="1" step="1"></label>
+              <label>Alto <input type="number" id="resize-h" min="1" step="1"></label>
+            </div>
+            <label class="check-row"><input type="checkbox" id="resize-lock" checked> Mantener proporción</label>
+            <div class="presets-grid">
+              <button class="btn preset" data-preset="1080x1080" type="button">1080×1080<br><small>Instagram post</small></button>
+              <button class="btn preset" data-preset="1080x1920" type="button">1080×1920<br><small>Historias</small></button>
+              <button class="btn preset" data-preset="1280x720" type="button">1280×720<br><small>YouTube miniatura</small></button>
+              <button class="btn preset" data-preset="1600x900" type="button">1600×900<br><small>X / Twitter</small></button>
+              <button class="btn preset" data-preset="1920x1080" type="button">1920×1080<br><small>HD</small></button>
+              <button class="btn preset" data-preset="512x512" type="button">512×512<br><small>Avatar</small></button>
+            </div>
+            <div id="resize-current" class="hint"></div>
+            <button id="resize-clear" class="btn" type="button">Quitar redimensionado</button>
+          </div>
+
+          <div class="panel" data-panel="crop">
+            <h2>Recortar</h2>
+            <p class="hint">Arrastra sobre la imagen para seleccionar el área.</p>
+            <div id="crop-dims" class="hint strong">Sin recorte — arrastra sobre la imagen</div>
+            <button id="btn-apply-crop" class="btn btn-primary" type="button" disabled>Aplicar recorte</button>
+            <button id="crop-clear" class="btn" type="button">Usar imagen completa</button>
+          </div>
+
+          <div class="panel" data-panel="rotate">
+            <h2>Rotar / Espejar</h2>
+            <div class="btn-grid">
+              <button id="rot-ccw" class="btn" type="button">⟲ 90°</button>
+              <button id="rot-cw" class="btn" type="button">⟳ 90°</button>
+              <button id="rot-180" class="btn" type="button">180°</button>
+              <button id="flip-h" class="btn" type="button">↔ Espejo H</button>
+              <button id="flip-v" class="btn" type="button">↕ Espejo V</button>
+            </div>
+          </div>
+
+          <div class="panel" data-panel="filters">
+            <h2>Filtros</h2>
+            <div class="chips">
+              <button class="chip" data-filter="grayscale" type="button">Blanco y negro</button>
+              <button class="chip" data-filter="sepia" type="button">Sepia</button>
+              <button class="chip" data-filter="invert" type="button">Negativo</button>
+            </div>
+            <p class="hint">Los filtros se combinan entre sí.</p>
+          </div>
+
+          <div class="panel" data-panel="adjust">
+            <h2>Ajustes</h2>
+            <label>Brillo <span id="adj-brightness-val" class="val">100%</span>
+              <input type="range" id="adj-brightness" min="0" max="200" value="100"></label>
+            <label>Contraste <span id="adj-contrast-val" class="val">100%</span>
+              <input type="range" id="adj-contrast" min="0" max="200" value="100"></label>
+            <label>Saturación <span id="adj-saturation-val" class="val">100%</span>
+              <input type="range" id="adj-saturation" min="0" max="200" value="100"></label>
+            <label>Desenfoque <span id="adj-blur-val" class="val">0 px</span>
+              <input type="range" id="adj-blur" min="0" max="20" value="0"></label>
+            <button id="adj-reset" class="btn" type="button">Restablecer ajustes</button>
+          </div>
+
+          <div class="panel" data-panel="background">
+            <h2>Quitar fondo</h2>
+            <button id="btn-remove-bg" class="btn btn-primary" type="button">🪄 Quitar fondo con IA</button>
+            <div id="bg-status" class="hint strong">Imagen original (con fondo)</div>
+            <p class="hint">Primera vez descarga un modelo (~40MB) · luego funciona con caché · procesado 100% local en tu navegador</p>
+          </div>
+
+          <div class="panel" data-panel="corners">
+            <h2>Esquinas</h2>
+            <label>Radio <span id="corners-val" class="val">0 px</span>
+              <input type="range" id="corners-slider" min="0" max="200" value="0"></label>
+            <button id="corners-reset" class="btn" type="button">Restablecer</button>
+          </div>
+
+          <div class="panel" data-panel="export">
+            <h2>Exportar</h2>
+            <label>Formato
+              <select id="export-format">
+                <option value="png" selected>PNG (transparencia)</option>
+                <option value="jpeg">JPG</option>
+                <option value="webp">WebP</option>
+              </select>
+            </label>
+            <div id="quality-row" class="hidden">
+              <label>Calidad <span id="export-quality-val" class="val">92%</span>
+                <input type="range" id="export-quality" min="10" max="100" value="92"></label>
+            </div>
+            <div id="export-dims" class="hint strong"></div>
+            <div id="export-size" class="hint"></div>
+            <button id="btn-download" class="btn btn-primary btn-big" type="button">⬇️ Descargar</button>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    Hecho con 💛 · <a href="https://github.com/" target="_blank" rel="noopener">open source en GitHub</a> · gratuito para siempre
+  </footer>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+
+  <div id="bg-progress" class="bg-progress hidden" role="dialog" aria-live="polite">
+    <div class="bg-card">
+      <div id="bg-progress-label">Cargando motor de IA…</div>
+      <div class="bar-track"><div id="bg-progress-bar" class="bar-fill"></div></div>
+    </div>
+  </div>
+
+  <script defer src="js/app.js"></script>
+  <script defer src="js/background.js"></script>
+  <script defer src="js/tools.js"></script>
+</body>
+</html>
