@@ -8,6 +8,7 @@
   const publicPath = new URL('vendor/imgly/', location.href).href;
 
   let modPromise = null;
+  let lastKey = null;
 
   function labelFor(key) {
     if (/fetch/i.test(key)) return 'Descargando modelo…';
@@ -17,7 +18,10 @@
 
   function loadModule() {
     if (!modPromise) {
-      modPromise = import('./vendor/imgly/background-removal.mjs').catch((err) => {
+      // '../' porque este módulo vive en js/ y el vendor está en la raíz del
+      // sitio; el import relativo se resuelve desde la URL del MÓDULO, no de
+      // la página (bajo el subpath de GitHub Pages: js/.. → raíz).
+      modPromise = import('../vendor/imgly/background-removal.mjs').catch((err) => {
         modPromise = null; // permite reintento
         throw new Error('No se pudo cargar el motor de IA local. Recarga la página e inténtalo de nuevo.');
       });
@@ -35,7 +39,6 @@
 
   async function run(sourceBlob, onProgress) {
     const mod = await loadModule();
-    let lastKey = null;
     return mod.removeBackground(sourceBlob, {
       ...config(),
       progress: (key, current, total) => {

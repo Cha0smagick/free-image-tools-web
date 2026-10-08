@@ -43,9 +43,12 @@
 
   function renderPreview() {
     if (!App.state.baseBitmap) return;
-    const dims = activeTool === 'crop' ? App.rotatedSize() : App.outputSize();
+    const inCropMode = activeTool === 'crop';
+    // en recortar: imagen completa para dibujar un recorte nuevo; tras
+    // aplicar, la vista muestra la imagen ya recortada (como pide el usuario)
+    const dims = inCropMode ? (App.state.crop ? App.outputSize() : App.rotatedSize()) : App.outputSize();
     const previewScale = fitScale(dims.w, dims.h);
-    App.renderTo(preview, previewScale, { ignoreCrop: activeTool === 'crop' });
+    App.renderTo(preview, previewScale, { ignoreCrop: inCropMode && !App.state.crop });
     updateCropOverlay();
     updateInfo();
   }
@@ -70,7 +73,9 @@
   }
 
   function drawCropBox(rect) {
-    const box = rect || pendingCrop || App.state.crop;
+    // la caja del overlay se dibuja SOLO durante el arrastre o con un recorte
+    // pendiente de aplicar; tras aplicar, la vista ya muestra el recorte
+    const box = rect || pendingCrop;
     if (!box || activeTool !== 'crop') {
       overlay.classList.add('hidden');
       return;
@@ -83,10 +88,15 @@
   }
 
   function cropDimsText(rect) {
-    const box = rect || pendingCrop || App.state.crop;
-    if (!box) return 'Sin recorte — arrastra sobre la imagen';
+    const box = rect || pendingCrop;
     const r = App.rotatedSize();
-    return Math.max(1, Math.round(box.w * r.w)) + ' × ' + Math.max(1, Math.round(box.h * r.h)) + ' px';
+    if (box) {
+      return Math.max(1, Math.round(box.w * r.w)) + ' × ' + Math.max(1, Math.round(box.h * r.h)) + ' px';
+    }
+    if (App.state.crop) {
+      return 'Recorte aplicado: ' + Math.max(1, Math.round(App.state.crop.w * r.w)) + ' × ' + Math.max(1, Math.round(App.state.crop.h * r.h)) + ' px — dibuja uno nuevo para reemplazarlo';
+    }
+    return 'Sin recorte — arrastra sobre la imagen';
   }
 
   function updateCropOverlay() {
