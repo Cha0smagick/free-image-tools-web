@@ -1,6 +1,12 @@
-/* PixelLibre — bindings de UI: paneles, recorte, preview, exportación */
+/* PixelLibre — bindings de UI: paneles, recorte, texto, tema, preview, exportación */
 (() => {
   'use strict';
+
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {
+      /* sin SW la app funciona igual; solo pierde el modo offline */
+    });
+  }
 
   const $ = (id) => document.getElementById(id);
 
@@ -157,6 +163,8 @@
   function setTool(name) {
     pendingCrop = null;
     dragRect = null;
+    selectedTextId = null;
+    textDragOrigin = null;
     $('btn-apply-crop').disabled = true;
     activeTool = name;
     toolBtns.forEach((b) => b.classList.toggle('active', b.dataset.tool === name));
@@ -172,7 +180,9 @@
     { id: 'adj-brightness', key: 'brightness', unit: '%' },
     { id: 'adj-contrast', key: 'contrast', unit: '%' },
     { id: 'adj-saturation', key: 'saturation', unit: '%' },
-    { id: 'adj-blur', key: 'blur', unit: ' px' }
+    { id: 'adj-blur', key: 'blur', unit: ' px' },
+    { id: 'adj-vignette', key: 'vignette', unit: '%' },
+    { id: 'adj-pixelate', key: 'pixelate', unit: ' px' }
   ];
 
   function commitSoon() {
@@ -215,6 +225,221 @@
     $('corners-slider').value = v;
     $('corners-val').textContent = v + ' px';
   }
+
+  /* ---------- tono (hue-rotate) ---------- */
+
+  $('hue-slider').addEventListener('input', (e) => {
+    const v = Number(e.target.value);
+    $('hue-val').textContent = v + '°';
+    App.setHue(v, false);
+    commitSoon();
+  });
+
+  $('hue-reset').addEventListener('click', () => {
+    $('hue-slider').value = 0;
+    $('hue-val').textContent = '0°';
+    App.setHue(0);
+  });
+
+  function syncHue() {
+    const v = App.state.filters.hue;
+    $('hue-slider').value = v;
+    $('hue-val').textContent = v + '°';
+  }
+
+  /* ---------- marco ---------- */
+
+  function currentFrameColor() { return $('frame-color').value || '#0B1026'; }
+
+  $('frame-width').addEventListener('input', (e) => {
+    const v = Number(e.target.value);
+    $('frame-width-val').textContent = v + ' px';
+    App.setFrame(v, currentFrameColor(), false);
+    commitSoon();
+  });
+
+  $('frame-color').addEventListener('input', () => {
+    App.setFrame(Number($('frame-width').value), currentFrameColor(), false);
+    commitSoon();
+  });
+
+  $('frame-reset').addEventListener('click', () => {
+    $('frame-width').value = 0;
+    $('frame-width-val').textContent = '0 px';
+    App.setFrame(0, currentFrameColor());
+  });
+
+  function syncFrame() {
+    const f = App.state.frame;
+    if (document.activeElement !== $('frame-width') && document.activeElement !== $('frame-color')) {
+      $('frame-width').value = f.width;
+      $('frame-width-val').textContent = f.width + ' px';
+      $('frame-color').value = f.color;
+    }
+  }
+
+  /* ---------- capas de texto ---------- */
+
+  let selectedTextId = null;
+  let textDragOrigin = null;
+
+  function selectedText() {
+    return App.state.texts.find((t) => t.id === selectedTextId) || null;
+  }
+
+  function readTextPanel() {
+    return {
+      text: $('text-input').value || 'Texto',
+      font: $('text-font').value,
+      size: Number($('text-size').value),
+      fill: $('text-fill').value,
+      stroke: $('text-stroke').value,
+      strokeWidth: Number($('text-stroke-width').value),
+      bold: $('text-bold').checked,
+      italic: $('text-italic').checked
+    };
+  }
+
+  function writeTextPanel(t) {
+    $('text-input').value = t ? t.text : '';
+    $('text-font').value = t ? t.font : 'Arial';
+    $('text-size').value = t ? t.size : 64;
+    $('text-size-val').textContent = (t ? t.size : 64) + ' px';
+    $('text-fill').value = t ? t.fill : '#FFFFFF';
+    $('text-stroke').value = t ? t.stroke : '#000000';
+    $('text-stroke-width').value = t ? t.strokeWidth : 4;
+    $('text-stroke-width-val').textContent = (t ? t.strokeWidth : 4) + ' px';
+    $('text-bold').checked = t ? t.bold : false;
+    $('text-italic').checked = t ? t.italic : false;
+  }
+
+  function syncTextUI() {
+    writeTextPanel(selectedText());
+    $('btn-remove-text').disabled = !selectedTextId;
+  }
+
+  $('text-input').addEventListener('input', () => {
+    if (selectedTextId) {
+      App.updateText(selectedTextId, { text: $('text-input').value || 'Texto' }, false);
+      commitSoon();
+    }
+  });
+
+  $('text-size').addEventListener('input', (e) => {
+    const v = Number(e.target.value);
+    $('text-size-val').textContent = v + ' px';
+    if (selectedTextId) {
+      App.updateText(selectedTextId, { size: v }, false);
+      commitSoon();
+    }
+  });
+
+  ['text-fill', 'text-stroke'].forEach((id) => {
+    $(id).addEventListener('input', () => {
+      if (selectedTextId) {
+        const patch = id === 'text-fill' ? { fill: $(id).value } : { stroke: $(id).value };
+        App.updateText(selectedTextId, patch, false);
+        commitSoon();
+      }
+    });
+  });
+
+  $('text-stroke-width').addEventListener('input', (e) => {
+    const v = Number(e.target.value);
+    $('text-stroke-width-val').textContent = v + ' px';
+    if (selectedTextId) {
+      App.updateText(selectedTextId, { strokeWidth: v }, false);
+      commitSoon();
+    }
+  });
+
+  ['text-bold', 'text-italic'].forEach((id) => {
+    $(id).addEventListener('change', () => {
+      if (selectedTextId) {
+        const patch = id === 'text-bold' ? { bold: $(id).checked } : { italic: $(id).checked };
+        App.updateText(selectedTextId, patch, false);
+        commitSoon();
+      }
+    });
+  });
+
+  $('text-font').addEventListener('change', () => {
+    if (selectedTextId) {
+      App.updateText(selectedTextId, { font: $('text-font').value }, false);
+      commitSoon();
+    }
+  });
+
+  $('btn-add-text').addEventListener('click', () => {
+    const item = readTextPanel();
+    item.x = 0.5;
+    item.y = 0.5;
+    selectedTextId = App.addText(item);
+    syncTextUI();
+  });
+
+  $('btn-remove-text').addEventListener('click', () => {
+    if (!selectedTextId) return;
+    App.removeText(selectedTextId);
+    selectedTextId = null;
+    textDragOrigin = null;
+    syncTextUI();
+  });
+
+  /* ---------- interacción de texto sobre el lienzo ---------- */
+
+  function canvasPoint(e) {
+    const rect = preview.getBoundingClientRect();
+    const scaleX = preview.width / rect.width;
+    const scaleY = preview.height / rect.height;
+    return {
+      px: (e.clientX - rect.left) * scaleX,
+      py: (e.clientY - rect.top) * scaleY
+    };
+  }
+
+  function textDown(e) {
+    if (activeTool !== 'text') return;
+    e.preventDefault();
+    const p = canvasPoint(e);
+    const dims = App.outputSize();
+    const scale = Math.max(1, dims.w) > 0 ? preview.width / Math.max(1, dims.w) : 1;
+    const hit = App.textAt(p.px, p.py, scale);
+    if (hit) {
+      selectedTextId = hit;
+      const t = selectedText();
+      textDragOrigin = { px: p.px, py: p.py, tx: t.x, ty: t.y };
+      try {
+        canvasHolder.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* captura opcional */
+      }
+    } else {
+      selectedTextId = null;
+      textDragOrigin = null;
+    }
+    syncTextUI();
+  }
+
+  function textMove(e) {
+    if (activeTool !== 'text' || !textDragOrigin) return;
+    e.preventDefault();
+    const p = canvasPoint(e);
+    const nx = clamp01(textDragOrigin.tx + (p.px - textDragOrigin.px) / preview.width);
+    const ny = clamp01(textDragOrigin.ty + (p.py - textDragOrigin.py) / preview.height);
+    App.updateText(selectedTextId, { x: nx, y: ny }, false);
+    commitSoon();
+  }
+
+  function textUp() {
+    textDragOrigin = null;
+  }
+
+  canvasHolder.addEventListener('pointerdown', textDown);
+  canvasHolder.addEventListener('pointermove', textMove);
+  canvasHolder.addEventListener('pointerup', textUp);
+  canvasHolder.addEventListener('pointercancel', textUp);
+
 
   /* ---------- filtros ---------- */
 
@@ -327,7 +552,7 @@
       App.pushState();
       const blob = await App.exportBlob();
       App.download(blob);
-      App.toast('¡Descarga lista! 🎉');
+      App.toast('¡Descarga lista!');
     } catch (err) {
       App.toast('No se pudo exportar la imagen');
     }
@@ -343,6 +568,29 @@
     $('editor').classList.add('hidden');
     $('dropzone-section').classList.remove('hidden');
   });
+
+  /* ---------- tema claro / oscuro ---------- */
+
+  const THEME_KEY = 'pixellibre-theme';
+
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    const btn = $('theme-toggle');
+    if (btn) btn.textContent = theme === 'light' ? 'Modo oscuro' : 'Modo claro';
+  }
+
+  $('theme-toggle').addEventListener('click', () => {
+    const current = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+    const next = current === 'light' ? 'dark' : 'light';
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch (err) {
+      /* localStorage puede estar bloqueado; el tema cambia igual en la sesión */
+    }
+    applyTheme(next);
+  });
+
+  applyTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
 
   /* ---------- dropzone ---------- */
 
@@ -413,7 +661,7 @@
     const removed = Boolean(s.baseBitmap && s.originalBitmap && s.baseBitmap !== s.originalBitmap);
     $('bg-status').textContent = removed ? '✓ Imagen sin fondo lista' : 'Imagen original (con fondo)';
     const btn = $('btn-remove-bg');
-    btn.textContent = removed ? 'Restaurar original' : '🪄 Quitar fondo con IA';
+    btn.textContent = removed ? 'Restaurar original' : 'Quitar fondo con IA';
     btn.dataset.mode = removed ? 'restore' : 'remove';
   }
 
@@ -463,6 +711,9 @@
     syncFilterChips();
     syncAdjustSliders();
     syncCorners();
+    syncHue();
+    syncFrame();
+    syncTextUI();
     syncExportUI();
     syncBgStatus();
     syncHistoryButtons();

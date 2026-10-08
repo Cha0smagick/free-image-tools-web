@@ -4,15 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PixelLibre — Edición de imágenes gratis en tu navegador</title>
-  <meta name="description" content="Editor de imágenes 100% gratuito: quita el fondo con IA, blanco y negro, redimensionar, recortar, rotar y más. Sin registro, sin marcas de agua, todo procesado en tu navegador.">
+  <meta name="description" content="Editor de imágenes 100% gratuito: quita el fondo con IA, texto con borde y relleno, blanco y negro, redimensionar, recortar, rotar, viñeta y más. Sin registro, sin marcas de agua, todo procesado en tu navegador.">
+  <meta name="author" content="Cha0smagickLabs">
   <meta property="og:title" content="PixelLibre — Edición de imágenes gratis en tu navegador">
-  <meta property="og:description" content="Quita el fondo con IA, filtros, recortes y más. Gratis, sin registro y privado: tus imágenes nunca salen de tu dispositivo.">
+  <meta property="og:site_name" content="Cha0smagickLabs">
+  <meta property="og:description" content="Quita el fondo con IA, añade texto, filtros, recortes y más. Gratis, sin registro y privado: tus imágenes nunca salen de tu dispositivo.">
   <meta property="og:type" content="website">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="dns-prefetch" href="https://staticimgly.com">
   <link rel="stylesheet" href="css/styles.css">
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('pixellibre-theme');
+        var theme = saved === 'light' || saved === 'dark' ? saved : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.dataset.theme = theme;
+      } catch (e) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    })();
+  </script>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -20,8 +31,9 @@
     "name": "PixelLibre",
     "applicationCategory": "MultimediaApplication",
     "operatingSystem": "Any",
+    "author": { "@type": "Organization", "name": "Cha0smagickLabs", "url": "https://cha0smagicklabs.com" },
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "description": "Editor de imágenes gratuito: quita el fondo con IA, filtros, recortes, rotación y exportación. Sin registro ni marcas de agua."
+    "description": "Editor de imágenes gratuito: quita el fondo con IA, texto con relleno y borde, filtros, recortes, rotación y exportación. Sin registro ni marcas de agua."
   }
   </script>
 </head>
@@ -41,13 +53,15 @@
       <h1>PixelLibre</h1>
       <span class="tagline">Edita imágenes 100% gratis · sin registro · todo en tu navegador</span>
     </div>
-    <span class="privacy-badge">🔒 Privado: tus imágenes nunca salen de tu dispositivo</span>
+    <div class="header-actions">
+      <span class="privacy-badge">Privado: tus imágenes nunca salen de tu dispositivo</span>
+      <button id="theme-toggle" class="btn" type="button" title="Cambiar tema">Modo claro</button>
+    </div>
   </header>
 
   <main>
     <section id="dropzone-section">
       <div id="dropzone" tabindex="0" role="button" aria-label="Subir imagen: arrastra aquí o haz clic para elegir">
-        <div class="dz-icon">🖼️</div>
         <div class="dz-title">Arrastra tu imagen aquí o haz clic para elegir</div>
         <div class="dz-hint">JPG · PNG · WebP · GIF · también puedes pegar con Ctrl+V</div>
         <div class="dz-free">Gratis para siempre · sin marcas de agua · sin límites</div>
@@ -57,25 +71,27 @@
 
     <div id="editor" class="editor hidden">
       <div class="editor-topbar">
-        <button id="btn-new" class="btn" type="button">🖼 Nueva imagen</button>
+        <button id="btn-new" class="btn" type="button">Nueva imagen</button>
         <div class="topbar-group">
           <button id="btn-undo" class="btn" type="button" title="Ctrl+Z">↶ Deshacer</button>
           <button id="btn-redo" class="btn" type="button" title="Ctrl+Y">↷ Rehacer</button>
-          <button id="btn-reset" class="btn" type="button">♻ Reiniciar</button>
+          <button id="btn-reset" class="btn" type="button">Reiniciar</button>
         </div>
         <span id="img-info" class="img-info"></span>
       </div>
 
       <div class="editor-main">
         <nav class="tools-rail" aria-label="Herramientas">
-          <button class="tool-btn active" data-tool="resize" type="button"><span class="tool-ico">📐</span>Redimensionar</button>
-          <button class="tool-btn" data-tool="crop" type="button"><span class="tool-ico">✂️</span>Recortar</button>
-          <button class="tool-btn" data-tool="rotate" type="button"><span class="tool-ico">🔄</span>Rotar / Espejar</button>
-          <button class="tool-btn" data-tool="filters" type="button"><span class="tool-ico">🎨</span>Filtros</button>
-          <button class="tool-btn" data-tool="adjust" type="button"><span class="tool-ico">☀️</span>Ajustes</button>
-          <button class="tool-btn" data-tool="background" type="button"><span class="tool-ico">🪄</span>Quitar fondo</button>
-          <button class="tool-btn" data-tool="corners" type="button"><span class="tool-ico">🔲</span>Esquinas</button>
-          <button class="tool-btn" data-tool="export" type="button"><span class="tool-ico">⬇️</span>Exportar</button>
+          <button class="tool-btn active" data-tool="resize" type="button">Redimensionar</button>
+          <button class="tool-btn" data-tool="crop" type="button">Recortar</button>
+          <button class="tool-btn" data-tool="rotate" type="button">Rotar / Espejar</button>
+          <button class="tool-btn" data-tool="filters" type="button">Filtros</button>
+          <button class="tool-btn" data-tool="adjust" type="button">Ajustes</button>
+          <button class="tool-btn" data-tool="text" type="button">Texto</button>
+          <button class="tool-btn" data-tool="marco" type="button">Marco</button>
+          <button class="tool-btn" data-tool="background" type="button">Quitar fondo</button>
+          <button class="tool-btn" data-tool="corners" type="button">Esquinas</button>
+          <button class="tool-btn" data-tool="export" type="button">Exportar</button>
         </nav>
 
         <div class="canvas-wrap" id="canvas-wrap">
@@ -131,6 +147,9 @@
               <button class="chip" data-filter="sepia" type="button">Sepia</button>
               <button class="chip" data-filter="invert" type="button">Negativo</button>
             </div>
+            <label>Tono <span id="hue-val" class="val">0°</span>
+              <input type="range" id="hue-slider" min="-180" max="180" value="0"></label>
+            <button id="hue-reset" class="btn" type="button">Restablecer tono</button>
             <p class="hint">Los filtros se combinan entre sí.</p>
           </div>
 
@@ -144,14 +163,55 @@
               <input type="range" id="adj-saturation" min="0" max="200" value="100"></label>
             <label>Desenfoque <span id="adj-blur-val" class="val">0 px</span>
               <input type="range" id="adj-blur" min="0" max="20" value="0"></label>
+            <label>Viñeta <span id="adj-vignette-val" class="val">0%</span>
+              <input type="range" id="adj-vignette" min="0" max="100" value="0"></label>
+            <label>Pixelar <span id="adj-pixelate-val" class="val">0 px</span>
+              <input type="range" id="adj-pixelate" min="0" max="40" value="0"></label>
             <button id="adj-reset" class="btn" type="button">Restablecer ajustes</button>
+          </div>
+
+          <div class="panel" data-panel="text">
+            <h2>Texto</h2>
+            <textarea id="text-input" rows="2" placeholder="Tu texto aquí"></textarea>
+            <label>Fuente
+              <select id="text-font">
+                <option value="Arial" selected>Arial</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Courier New">Courier New</option>
+                <option value="Impact">Impact</option>
+                <option value="Trebuchet MS">Trebuchet MS</option>
+              </select>
+            </label>
+            <label>Tamaño <span id="text-size-val" class="val">64 px</span>
+              <input type="range" id="text-size" min="12" max="300" value="64"></label>
+            <div class="field-row">
+              <label>Relleno <input type="color" id="text-fill" value="#FFFFFF"></label>
+              <label>Borde <input type="color" id="text-stroke" value="#000000"></label>
+            </div>
+            <label>Grosor del borde <span id="text-stroke-width-val" class="val">4 px</span>
+              <input type="range" id="text-stroke-width" min="0" max="40" value="4"></label>
+            <label class="check-row"><input type="checkbox" id="text-bold"> Negrita</label>
+            <label class="check-row"><input type="checkbox" id="text-italic"> Cursiva</label>
+            <button id="btn-add-text" class="btn btn-primary" type="button">Añadir texto</button>
+            <button id="btn-remove-text" class="btn" type="button" disabled>Eliminar seleccionado</button>
+            <p class="hint">Haz clic sobre un texto para seleccionarlo y arrastrarlo.</p>
+          </div>
+
+          <div class="panel" data-panel="marco">
+            <h2>Marco</h2>
+            <label>Grosor <span id="frame-width-val" class="val">0 px</span>
+              <input type="range" id="frame-width" min="0" max="100" value="0"></label>
+            <label>Color <input type="color" id="frame-color" value="#0B1026"></label>
+            <button id="frame-reset" class="btn" type="button">Quitar marco</button>
           </div>
 
           <div class="panel" data-panel="background">
             <h2>Quitar fondo</h2>
-            <button id="btn-remove-bg" class="btn btn-primary" type="button">🪄 Quitar fondo con IA</button>
+            <button id="btn-remove-bg" class="btn btn-primary" type="button">Quitar fondo con IA</button>
             <div id="bg-status" class="hint strong">Imagen original (con fondo)</div>
-            <p class="hint">Primera vez descarga un modelo (~40MB) · luego funciona con caché · procesado 100% local en tu navegador</p>
+            <p class="hint">El modelo de IA (~90 MB) está alojado en este sitio y se descarga una sola vez; después queda en caché y funciona incluso sin conexión. Procesado 100% local en tu navegador.</p>
           </div>
 
           <div class="panel" data-panel="corners">
@@ -176,7 +236,7 @@
             </div>
             <div id="export-dims" class="hint strong"></div>
             <div id="export-size" class="hint"></div>
-            <button id="btn-download" class="btn btn-primary btn-big" type="button">⬇️ Descargar</button>
+            <button id="btn-download" class="btn btn-primary btn-big" type="button">Descargar</button>
           </div>
         </aside>
       </div>
@@ -184,7 +244,7 @@
   </main>
 
   <footer class="site-footer">
-    Hecho con 💛 · <a href="https://github.com/" target="_blank" rel="noopener">open source en GitHub</a> · gratuito para siempre
+    Desarrollado por <a href="https://cha0smagicklabs.com" target="_blank" rel="noopener">Cha0smagickLabs</a> · <a href="https://github.com/" target="_blank" rel="noopener">open source en GitHub</a> · gratuito para las masas
   </footer>
 
   <div id="toast" class="toast hidden" role="status"></div>

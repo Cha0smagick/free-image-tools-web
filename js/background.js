@@ -1,8 +1,11 @@
-/* PixelLibre — carga perezosa del motor de IA (@imgly/background-removal) */
+/* PixelLibre — motor de IA auto-hospedado (vendor/imgly, sin dependencias externas) */
 (() => {
   'use strict';
 
-  const CDN = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
+  // publicPath DEBE ser una URL absoluta en runtime (el SDK resuelve los
+  // chunks con new URL(chunk.hash, publicPath)). Se calcula desde la URL de
+  // la página para que funcione bajo el subpath de GitHub Pages.
+  const publicPath = new URL('vendor/imgly/', location.href).href;
 
   let modPromise = null;
 
@@ -14,21 +17,27 @@
 
   function loadModule() {
     if (!modPromise) {
-      modPromise = import(CDN).catch((err) => {
-        modPromise = null;
-        if (err instanceof TypeError) {
-          throw new Error('Se necesita conexión a internet la primera vez para descargar el modelo de IA');
-        }
-        throw err;
+      modPromise = import('./vendor/imgly/background-removal.mjs').catch((err) => {
+        modPromise = null; // permite reintento
+        throw new Error('No se pudo cargar el motor de IA local. Recarga la página e inténtalo de nuevo.');
       });
     }
     return modPromise;
+  }
+
+  function config() {
+    return {
+      publicPath,
+      model: 'medium', // isnet_fp16 (88 MB, auto-hospedado)
+      proxyToWorker: true,
+    };
   }
 
   async function run(sourceBlob, onProgress) {
     const mod = await loadModule();
     let lastKey = null;
     return mod.removeBackground(sourceBlob, {
+      ...config(),
       progress: (key, current, total) => {
         if (!onProgress || !(total > 0)) return;
         const pct = Math.round((current / total) * 100);
@@ -40,5 +49,21 @@
     });
   }
 
-  window.BgRemoval = { run };
+  // Precarga todos los recursos del modelo (models/medium + wasm) para que
+  // queden en la caché del navegador antes del primer recorte.
+  async function preload(onProgress) {
+    const mod = await loadModule();
+    return mod.preload({
+      ...config(),
+      progress: (key, current, total) => {
+        if (!onProgress || !(total > 0)) return;
+        const pct = Math.round((current / total) * 100);
+        const label = key !== lastKey ? labelFor(key) : null;
+        lastKey = key;
+        onProgress(label, pct);
+      },
+    });
+  }
+
+  window.BgRemoval = { run, preload, publicPath };
 })();
